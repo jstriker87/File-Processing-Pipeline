@@ -6,22 +6,28 @@ import (
 	"io"
 	"io/fs"
 	"log"
-	"mime"
+	//"mime"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
 
-const maxUploadSize = 1 * 1024 * 1024 // 0.5 mb
+const maxUploadSize = 1 * 1024 * 1024 // 1 mb
 
 type User struct {
 	ID       int    `json:"id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+}
+
+type Desc struct {
+	Description string `json:"description"`
 }
 
 var users []User
@@ -38,6 +44,14 @@ func main() {
 
 func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
+	//var data Desc
+	//err := json.NewDecoder(r.Body).Decode(&data)
+	//if err != nil {
+	//	log.Println("ererer" + err.Error())
+	//	http.Error(w, "Invalid JSON "+err.Error(), http.StatusBadRequest)
+	//	return
+	//}
+
 	wd, _ := os.Getwd()
 	uploadPath := wd + "/uploads/"
 
@@ -46,44 +60,55 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	fileType := r.PostFormValue("type")
 	fmt.Println(fileType)
-	file, handler, err := r.FormFile("uploadFile")
+	uploadFile, handler, err := r.FormFile("uploadFile")
+	//descriptionJson := r.FormValue("description")
+
 	if err != nil {
 		http.Error(w, "Error with provided file: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+
+	defer uploadFile.Close()
 
 	if handler.Size > maxUploadSize {
-		http.Error(w, "File size of " + strconv.FormatInt(handler.Size,10)  + " bytes is bigger than the allowed size of " + strconv.Itoa(maxUploadSize) + " bytes", http.StatusBadRequest)
+		folderSize := fmt.Sprintf("%.2f", float64(handler.Size)/(1024*1024))
+		http.Error(w, "File size of "+folderSize+" MB is bigger than the allowed size of "+strconv.Itoa(maxUploadSize/(1024*1024))+" MB", http.StatusBadRequest)
 		return
 	}
 
-	fileBytes, err := io.ReadAll(file)
+	fileBytes, err := io.ReadAll(uploadFile)
 
 	if err != nil {
 		http.Error(w, "Error with provided file: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	FileType := http.DetectContentType(fileBytes)
-	fileEx, err := mime.ExtensionsByType(FileType)
+	//FileType := http.DetectContentType(fileBytes)
+	//fileEx, err := mime.ExtensionsByType(FileType)
 
-	fmt.Printf("Uploaded File: %+v\n", handler.Filename)
-	fmt.Printf("File Size: %+v\n", handler.Size)
-	fmt.Printf("MIME Header: %+v\n", handler.Header)
-	fmt.Printf("File type: %+v\n", fileEx[0])
+	//fmt.Printf("Uploaded File: %+v\n", handler.Filename)
+	//fmt.Printf("File Size: %+v\n", handler.Size)
+	//fmt.Printf("MIME Header: %+v\n", handler.Header)
+	//fmt.Printf("File type: %+v\n", fileEx[0])
 
-	if _, err := os.Stat("uploads"); os.IsNotExist(err) {
-		os.Mkdir("uploads", 0755)
+	fileName_no_extension := strings.Split(handler.Filename, ".")[0]
+	fileName_no_extension = regexp.MustCompile(`[^a-zA-Z0-9 ]+`).ReplaceAllString(fileName_no_extension, "")
+
+	if _, err := os.Stat(filepath.Join("uploads",fileName_no_extension)); os.IsNotExist(err) {
+		err := os.MkdirAll(filepath.Join("uploads", fileName_no_extension), 0755)
+
+		if err != nil {
+			http.Error(w, "Error creating folder: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
-	finalPath := filepath.Join(uploadPath + handler.Filename)
+	finalPath := filepath.Join(uploadPath, fileName_no_extension + "/" + handler.Filename)
 
-	_ , staterr := os.Stat(finalPath)
-	if os.IsNotExist(staterr) {
+	_, err = os.Stat(finalPath)
+	if os.IsNotExist(err) {
 	} else {
 		http.Error(w, "Error: file Exists", http.StatusBadRequest)
 		return
@@ -101,19 +126,46 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 }
 
-
 func getDirectoryData(w http.ResponseWriter, r *http.Request) {
+
 	wd, _ := os.Getwd()
 	uploadPath := wd + "/uploads/"
 	root := os.DirFS(uploadPath)
 	allFiles, _ := fs.Glob(root, "*.*")
 
 	var files []string
-    for _, f := range allFiles {
-       files = append(files, path.Join(uploadPath, f))
-	   fmt.Println(files)
-    }
+	for _, f := range allFiles {
+		files = append(files, path.Join(uploadPath, f))
+		fmt.Println(files)
+	}
+	var totalSize int64
+	err := filepath.Walk(uploadPath, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			totalSize += info.Size()
+		}
+		return nil
+	})
 
+	if err != nil {
+		json.NewEncoder(w).Encode(files)
+		return
+	}
+
+	folderSize := fmt.Sprintf("Total folder: %.1f MB", float64(totalSize)/(1024*1024))
+	files = append(files, folderSize)
+
+	json.NewEncoder(w).Encode(files)
+
+}
+
+func AddDescription(w http.ResponseWriter, r *http.Request) {
+	var data Desc
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid JSON "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
 }
 
