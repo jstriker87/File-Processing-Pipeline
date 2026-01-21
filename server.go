@@ -6,7 +6,6 @@ import (
 	"io"
 	"io/fs"
 	"log"
-	//"mime"
 	"net/http"
 	"os"
 	"path"
@@ -14,28 +13,22 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/gorilla/mux"
 )
 
 const maxUploadSize = 1 * 1024 * 1024 // 1 mb
 
-type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-}
-
 type Desc struct {
 	Description string `json:"description"`
+	Upload_date string
+	Is_utf8     bool
 }
-
-var users []User
 
 func main() {
 	router := mux.NewRouter()
-	router.HandleFunc("/users", getUsers).Methods("GET")
-	router.HandleFunc("/users", createUser).Methods("POST")
 	router.HandleFunc("/upload", HandleFileUpload).Methods("POST")
 	router.HandleFunc("/status", getDirectoryData).Methods("GET")
 
@@ -44,13 +37,7 @@ func main() {
 
 func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
-	//var data Desc
-	//err := json.NewDecoder(r.Body).Decode(&data)
-	//if err != nil {
-	//	log.Println("ererer" + err.Error())
-	//	http.Error(w, "Invalid JSON "+err.Error(), http.StatusBadRequest)
-	//	return
-	//}
+	var data Desc
 
 	wd, _ := os.Getwd()
 	uploadPath := wd + "/uploads/"
@@ -60,10 +47,17 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileType := r.PostFormValue("type")
-	fmt.Println(fileType)
 	uploadFile, handler, err := r.FormFile("uploadFile")
-	//descriptionJson := r.FormValue("description")
+	buffer := make([]byte, 1024)
+	_, err = uploadFile.Read(buffer)
+	if utf8.Valid(buffer) {
+
+		data.Is_utf8 = true
+
+	}
+	descriptionJson := r.FormValue("descriptionData")
+	json.Unmarshal([]byte(descriptionJson), &data)
+	data.Upload_date = time.Now().String()
 
 	if err != nil {
 		http.Error(w, "Error with provided file: "+err.Error(), http.StatusBadRequest)
@@ -96,7 +90,7 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	fileName_no_extension := strings.Split(handler.Filename, ".")[0]
 	fileName_no_extension = regexp.MustCompile(`[^a-zA-Z0-9 ]+`).ReplaceAllString(fileName_no_extension, "")
 
-	if _, err := os.Stat(filepath.Join("uploads",fileName_no_extension)); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join("uploads", fileName_no_extension)); os.IsNotExist(err) {
 		err := os.MkdirAll(filepath.Join("uploads", fileName_no_extension), 0755)
 
 		if err != nil {
@@ -105,7 +99,7 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	finalPath := filepath.Join(uploadPath, fileName_no_extension + "/" + handler.Filename)
+	finalPath := filepath.Join(uploadPath, fileName_no_extension+"/"+handler.Filename)
 
 	_, err = os.Stat(finalPath)
 	if os.IsNotExist(err) {
@@ -114,13 +108,15 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newFile, err := os.Create(finalPath)
-
 	_, err = newFile.Write(fileBytes)
 
 	if err != nil {
 		http.Error(w, "Error: Unable to save file: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	dat, err := json.Marshal(data)
+	_, err = os.Create(filepath.Join(uploadPath, fileName_no_extension+"/"+"."+fileName_no_extension+".json"))
+	os.WriteFile(filepath.Join(uploadPath, fileName_no_extension+"/"+"."+fileName_no_extension+".json"), dat, 0644)
 
 	w.Write([]byte("SUCCESS"))
 
@@ -167,40 +163,4 @@ func AddDescription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-}
-
-func getUsers(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(users)
-}
-
-func createUser(w http.ResponseWriter, r *http.Request) {
-	var newUser User
-	err := json.NewDecoder(r.Body).Decode(&newUser)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "Invalid JSON "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if newUser.ID <= 0 {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
-		return
-	}
-	if newUser.Username == "" {
-		http.Error(w, "Username is required", http.StatusBadRequest)
-		return
-	}
-
-	if newUser.Email == "" {
-		http.Error(w, "Email is required", http.StatusBadRequest)
-		return
-	}
-
-	users = append(users, newUser)
-	err = json.NewEncoder(w).Encode(newUser)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 }
