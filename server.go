@@ -96,7 +96,7 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	//fmt.Printf("File type: %+v\n", fileEx[0])
 
 	fileName_no_extension := strings.Split(handler.Filename, ".")[0]
-	fileName_no_extension = regexp.MustCompile(`[^a-zA-Z0-9 ]+`).ReplaceAllString(fileName_no_extension, "")
+	fileName_no_extension = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(fileName_no_extension, "")
 
 	if _, err := os.Stat(filepath.Join("uploads", fileName_no_extension)); os.IsNotExist(err) {
 		err := os.MkdirAll(filepath.Join("uploads", fileName_no_extension), 0755)
@@ -144,18 +144,14 @@ func Search(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
-	var files []string
 
 	results := []Desc2{}
 	for i := 0; i < len(pathList); i++ {
-
+		var data2 Desc2
 		jsonFile, _ := os.Open(pathList[i])
-		defer jsonFile.Close()
 		fileBytes, _ := io.ReadAll(jsonFile)
-
+		jsonFile.Close()
 		if strings.Contains(pathList[i], ".json") {
-
-			var data2 Desc2
 			err := json.Unmarshal([]byte(fileBytes), &data2)
 			if err != nil {
 				fmt.Println(err.Error())
@@ -164,47 +160,42 @@ func Search(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(strings.ToLower(data2.Description), string(searchQuery)) {
 				containsItem := slices.Contains(results, data2)
 				if containsItem == false {
-					_ = append(results, data2)
+					path2 := strings.Split(pathList[i], "/")
+					data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2] 
+					data2.FilePath = ""
+					results = append(results, data2)
 				}
 			}
 		} else {
-			var data3 Desc2
 			if strings.Contains(string(fileBytes), string(searchQuery)) {
-					_ = filepath.Walk(path.Dir(pathList[i]), func(path1 string, info os.FileInfo, err error) error {
-
-						if strings.Contains(path1, ".json") {
-							jsonFile, err := os.Open(path1)
-
-							if err != nil {
-								fmt.Println(err)
-							}
-							defer jsonFile.Close()
-							fileBytes, _ := io.ReadAll(jsonFile)
-							_ = json.Unmarshal([]byte(fileBytes), &data3)
-							// Fix line below 
-							_ = slices.Contains(results, data3)
-							data3.FilePath = ""
-							path2 := strings.Split(path1,"/")
-							path2 = path2[len(path2)-2:len(path2)]
-							data3.DownloadPath = strings.Join([]string(path2), "/")
-
-							_ = append(results, data3)
+				_ = filepath.Walk(path.Dir(pathList[i]), func(path1 string, info os.FileInfo, err error) error {
+					if strings.Contains(path1, ".json") {
+						jsonFile, err := os.Open(path1)
+						if err != nil {
+							fmt.Println(err)
+						}
+						defer jsonFile.Close()
+						fileBytes, _ := io.ReadAll(jsonFile)
+						_ = json.Unmarshal([]byte(fileBytes), &data2)
+						// Fix line below
+						containsItem := slices.Contains(results, data2)
+						if containsItem == false {
+							data2.FilePath = ""
+							path2 := strings.Split(path1, "/")
+							data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2] 
+							results = append(results, data2)
 						}
 
-						fmt.Println(data3)
-						//data3.DownloadPath = "http://localhost:8080/files/" +  "/download"
-
-						//if !info.IsDir() {
-						//	pathList = append(pathList, path1)
-						//}
-						return nil
-					})
+					}
+					return nil
+				})
 			}
 
 		}
 	}
 	// TO-DO - Return array of results back to the requester
-	fmt.Println(files)
+
+	fmt.Printf("results: %+v\n", results)
 }
 
 func getDirectoryData(w http.ResponseWriter, r *http.Request) {
