@@ -11,10 +11,10 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gorilla/mux"
 )
@@ -23,14 +23,14 @@ const maxUploadSize = 1 * 1024 * 1024 // 1 mb
 
 type Desc struct {
 	Description string `json:"description"`
-	Upload_date string
-	Is_utf8     bool
+	UploadDate  time.Time
+	FilePath    string
 }
 
 type Desc2 struct {
 	Description string    `json:"description"`
-	UploadDate  time.Time `json:"upload_date"`
-	IsUTF8      bool      `json:"is_utf8"`
+	UploadDate  time.Time `json:"uploaddate"`
+	FilePath    string    `json:"filepath"`
 }
 
 func main() {
@@ -55,16 +55,16 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uploadFile, handler, err := r.FormFile("uploadFile")
-	buffer := make([]byte, 1024)
-	_, err = uploadFile.Read(buffer)
-	if utf8.Valid(buffer) {
+	//buffer := make([]byte, 1024)
+	//_, err = uploadFile.Read(buffer)
+	//if utf8.Valid(buffer) {
 
-		data.Is_utf8 = true
+	//	data.Is_utf8 = true
 
-	}
+	//}
 	descriptionJson := r.FormValue("descriptionData")
 	json.Unmarshal([]byte(descriptionJson), &data)
-	data.Upload_date = time.Now().String()
+	data.UploadDate = time.Now()
 
 	if err != nil {
 		http.Error(w, "Error with provided file: "+err.Error(), http.StatusBadRequest)
@@ -107,6 +107,7 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	finalPath := filepath.Join(uploadPath, fileName_no_extension+"/"+handler.Filename)
+	data.FilePath = finalPath
 
 	_, err = os.Stat(finalPath)
 	if os.IsNotExist(err) {
@@ -131,35 +132,50 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 func Search(w http.ResponseWriter, r *http.Request) {
 
-	searchQuery := r.URL.Query().Get("sq")
-	fmt.Println(searchQuery)
+	searchQuery := strings.ToLower(r.URL.Query().Get("sq"))
 
 	var pathList []string
 	wd, _ := os.Getwd()
 	uploadPath := wd + "/uploads/"
 	_ = filepath.Walk(uploadPath, func(path1 string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
-			if strings.Contains(info.Name(), ".json") {
-				pathList = append(pathList, path1)
-				// TO DO - Check if the actual file in the folder (not the json) is UTF-8. If so also add it to the pathList array
-			}
+			pathList = append(pathList, path1)
 		}
 		return nil
 	})
 	var files []string
 
 	for i := 0; i < len(pathList); i++ {
-		var data Desc2
+
 		jsonFile, _ := os.Open(pathList[i])
 		defer jsonFile.Close()
 		fileBytes, _ := io.ReadAll(jsonFile)
-		json.Unmarshal([]byte(fileBytes), &data)
-		if strings.Contains(data.Description, string(searchQuery)) {
-			files = append(files, pathList[i])
-			// TO-DO - Fix the append above so it just returns the folder not the actual file
+
+		if strings.Contains(pathList[i], ".json") {
+
+			var data2 Desc2
+			err := json.Unmarshal([]byte(fileBytes), &data2)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			if strings.Contains(strings.ToLower(data2.Description), string(searchQuery)) {
+				containsItem := slices.Contains(files, data2.FilePath) 
+				if containsItem == false {
+					files = append(files, data2.FilePath)
+				}
+			}
+		} else {
+			if strings.Contains(string(fileBytes), string(searchQuery)) {
+				containsItem := slices.Contains(files, pathList[i]) 
+				if containsItem == false {
+					files = append(files, pathList[i])
+				}
+			}
+
 		}
 	}
-	// TO-DO - Once the append above has been fixed remove any duplicate folders and return it back to the requester
+	// TO-DO - Return array of results back to the requester
 	fmt.Println(files)
 }
 
