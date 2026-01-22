@@ -27,10 +27,17 @@ type Desc struct {
 	Is_utf8     bool
 }
 
+type Desc2 struct {
+	Description string    `json:"description"`
+	UploadDate  time.Time `json:"upload_date"`
+	IsUTF8      bool      `json:"is_utf8"`
+}
+
 func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/upload", HandleFileUpload).Methods("POST")
 	router.HandleFunc("/status", getDirectoryData).Methods("GET")
+	router.HandleFunc("/search", Search).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
@@ -122,6 +129,40 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func Search(w http.ResponseWriter, r *http.Request) {
+
+	searchQuery := r.URL.Query().Get("sq")
+	fmt.Println(searchQuery)
+
+	var pathList []string
+	wd, _ := os.Getwd()
+	uploadPath := wd + "/uploads/"
+	_ = filepath.Walk(uploadPath, func(path1 string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			if strings.Contains(info.Name(), ".json") {
+				pathList = append(pathList, path1)
+				// TO DO - Check if the actual file in the folder (not the json) is UTF-8. If so also add it to the pathList array
+			}
+		}
+		return nil
+	})
+	var files []string
+
+	for i := 0; i < len(pathList); i++ {
+		var data Desc2
+		jsonFile, _ := os.Open(pathList[i])
+		defer jsonFile.Close()
+		fileBytes, _ := io.ReadAll(jsonFile)
+		json.Unmarshal([]byte(fileBytes), &data)
+		if strings.Contains(data.Description, string(searchQuery)) {
+			files = append(files, pathList[i])
+			// TO-DO - Fix the append above so it just returns the folder not the actual file
+		}
+	}
+	// TO-DO - Once the append above has been fixed remove any duplicate folders and return it back to the requester
+	fmt.Println(files)
+}
+
 func getDirectoryData(w http.ResponseWriter, r *http.Request) {
 
 	wd, _ := os.Getwd()
@@ -132,7 +173,6 @@ func getDirectoryData(w http.ResponseWriter, r *http.Request) {
 	var files []string
 	for _, f := range allFiles {
 		files = append(files, path.Join(uploadPath, f))
-		fmt.Println(files)
 	}
 	var totalSize int64
 	err := filepath.Walk(uploadPath, func(path string, info os.FileInfo, err error) error {
