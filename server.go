@@ -28,9 +28,10 @@ type Desc struct {
 }
 
 type Desc2 struct {
-	Description string    `json:"description"`
-	UploadDate  time.Time `json:"uploaddate"`
-	FilePath    string    `json:"filepath"`
+	Description  string    `json:"description"`
+	UploadDate   time.Time `json:"uploaddate"`
+	FilePath     string    `json:"filepath"`
+	DownloadPath string
 }
 
 func main() {
@@ -145,6 +146,7 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	})
 	var files []string
 
+	results := []Desc2{}
 	for i := 0; i < len(pathList); i++ {
 
 		jsonFile, _ := os.Open(pathList[i])
@@ -160,17 +162,43 @@ func Search(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if strings.Contains(strings.ToLower(data2.Description), string(searchQuery)) {
-				containsItem := slices.Contains(files, data2.FilePath) 
+				containsItem := slices.Contains(results, data2)
 				if containsItem == false {
-					files = append(files, data2.FilePath)
+					_ = append(results, data2)
 				}
 			}
 		} else {
+			var data3 Desc2
 			if strings.Contains(string(fileBytes), string(searchQuery)) {
-				containsItem := slices.Contains(files, pathList[i]) 
-				if containsItem == false {
-					files = append(files, pathList[i])
-				}
+					_ = filepath.Walk(path.Dir(pathList[i]), func(path1 string, info os.FileInfo, err error) error {
+
+						if strings.Contains(path1, ".json") {
+							jsonFile, err := os.Open(path1)
+
+							if err != nil {
+								fmt.Println(err)
+							}
+							defer jsonFile.Close()
+							fileBytes, _ := io.ReadAll(jsonFile)
+							_ = json.Unmarshal([]byte(fileBytes), &data3)
+							// Fix line below 
+							_ = slices.Contains(results, data3)
+							data3.FilePath = ""
+							path2 := strings.Split(path1,"/")
+							path2 = path2[len(path2)-2:len(path2)]
+							data3.DownloadPath = strings.Join([]string(path2), "/")
+
+							_ = append(results, data3)
+						}
+
+						fmt.Println(data3)
+						//data3.DownloadPath = "http://localhost:8080/files/" +  "/download"
+
+						//if !info.IsDir() {
+						//	pathList = append(pathList, path1)
+						//}
+						return nil
+					})
 			}
 
 		}
