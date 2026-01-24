@@ -19,14 +19,14 @@ A file processing and storage backend  with metadata, written in Go.
                 - File-Processing-Pipeline
                     - Uploads
 
-- A future parameter (-upload-path, -up) will allow users to specify the location of the uploads folder (the folder name can also be changed as desired)
+- A config file can be used to specify the location of the uploads folder (see Configuration section)
 
 ## Operations 
 
 - The backend system exposes four endpoints
 
     - /status - Shows a basic list of the files in the ‘uploads’ folder within the backend (you can also change the folder location)
-    - /upload - Allows users to upload a file of up to a certain size ( in the future users will be  able set the maximum file size using the parameters  '--max-filesize,-mf')
+    - /upload - Allows users to upload a file of up to a certain size (The maximum filesize of files can be set in the configuration (see Configuration section)
         - Alongside the file you can provide a description as a json with the key of 'description'. Foe example {"description": "My current CV 2026"}
 
     - /search - Allows users to search for words in the description provided with the file. You can also search inside the files themselves if they are encoded using UTF-8. Example files are:
@@ -44,13 +44,17 @@ A file processing and storage backend  with metadata, written in Go.
 
 - This script has currently only been tested on Linux, but it will also be tested on Windows & Mac, and once completed this section will be updated to confirm full compatibility
 
-### Save Location / Upload path
-
--  (TBC) - The program will provide a parameter when running (--upload-path,-up), to allow the user to specify where the upload folder is located
-    - There will also be an option to use a basic yaml config file to specify the upload path
-
-
 ### Running program
+
+TBC
+
+### Configuration
+
+#### Save Location / Upload path
+
+TBC
+
+#### Maximum filesize
 
 TBC
 

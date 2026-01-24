@@ -57,13 +57,6 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uploadFile, handler, err := r.FormFile("uploadFile")
-	//buffer := make([]byte, 1024)
-	//_, err = uploadFile.Read(buffer)
-	//if utf8.Valid(buffer) {
-
-	//	data.Is_utf8 = true
-
-	//}
 	descriptionJson := r.FormValue("descriptionData")
 	json.Unmarshal([]byte(descriptionJson), &data)
 	data.UploadDate = time.Now()
@@ -88,16 +81,13 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//FileType := http.DetectContentType(fileBytes)
-	//fileEx, err := mime.ExtensionsByType(FileType)
-
-	//fmt.Printf("Uploaded File: %+v\n", handler.Filename)
-	//fmt.Printf("File Size: %+v\n", handler.Size)
-	//fmt.Printf("MIME Header: %+v\n", handler.Header)
-	//fmt.Printf("File type: %+v\n", fileEx[0])
-
 	fileName_no_extension := strings.Split(handler.Filename, ".")[0]
 	fileName_no_extension = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(fileName_no_extension, "")
+	if len(data.Description) == 0 {
+
+		data.Description = handler.Filename
+
+	}
 
 	if _, err := os.Stat(filepath.Join("uploads", fileName_no_extension)); os.IsNotExist(err) {
 		err := os.MkdirAll(filepath.Join("uploads", fileName_no_extension), 0755)
@@ -176,27 +166,30 @@ func Search(w http.ResponseWriter, r *http.Request) {
 
 	results := []Desc2{}
 	for i := 0; i < len(pathList); i++ {
-		var data2 Desc2
+		var data Desc2
 		jsonFile, _ := os.Open(pathList[i])
 		fileBytes, _ := io.ReadAll(jsonFile)
 		jsonFile.Close()
 		if strings.Contains(pathList[i], ".json") {
-			err := json.Unmarshal([]byte(fileBytes), &data2)
+			err := json.Unmarshal([]byte(fileBytes), &data)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
 			}
-			if strings.Contains(strings.ToLower(data2.Description), string(searchQuery)) {
-				containsItem := slices.Contains(results, data2)
+			if strings.Contains(strings.ToLower(data.Description), string(searchQuery)) {
+				containsItem := slices.Contains(results, data)
 				if containsItem == false {
 					path2 := strings.Split(pathList[i], "/")
-					data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2]
-					data2.FilePath = ""
-					results = append(results, data2)
+					data.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2]
+					data.FilePath = ""
+					results = append(results, data)
 				}
 			}
 		} else {
-			if strings.Contains(string(fileBytes), string(searchQuery)) {
+
+
+			fileString := strings.ToLower(string(fileBytes))
+			if strings.Contains(fileString, string(searchQuery)) {
 				_ = filepath.Walk(path.Dir(pathList[i]), func(path1 string, info os.FileInfo, err error) error {
 					if strings.Contains(path1, ".json") {
 						jsonFile, err := os.Open(path1)
@@ -205,14 +198,13 @@ func Search(w http.ResponseWriter, r *http.Request) {
 						}
 						defer jsonFile.Close()
 						fileBytes, _ := io.ReadAll(jsonFile)
-						_ = json.Unmarshal([]byte(fileBytes), &data2)
-						// Fix line below
-						containsItem := slices.Contains(results, data2)
+						_ = json.Unmarshal([]byte(fileBytes), &data)
+						containsItem := slices.Contains(results, data)
 						if containsItem == false {
-							data2.FilePath = ""
+							data.FilePath = ""
 							path2 := strings.Split(path1, "/")
-							data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2]
-							results = append(results, data2)
+							data.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2]
+							results = append(results, data)
 						}
 
 					}
@@ -222,7 +214,6 @@ func Search(w http.ResponseWriter, r *http.Request) {
 
 		}
 	}
-	// TO-DO - Return array of results back to the requester
 
 	fmt.Printf("results: %+v\n", results)
 	_ = json.NewEncoder(w).Encode(results)
