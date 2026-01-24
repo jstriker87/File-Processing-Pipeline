@@ -39,6 +39,7 @@ func main() {
 	router.HandleFunc("/upload", HandleFileUpload).Methods("POST")
 	router.HandleFunc("/status", getDirectoryData).Methods("GET")
 	router.HandleFunc("/search", Search).Methods("GET")
+	router.HandleFunc("/download", DownloadFile).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
@@ -131,6 +132,34 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func DownloadFile(w http.ResponseWriter, r *http.Request) {
+
+	DownloadPath := r.URL.Query().Get("file")
+	wd, _ := os.Getwd()
+	Pth := wd + "/uploads/" + DownloadPath
+	if _, err := os.Stat(Pth); os.IsNotExist(err) {
+		return
+	}
+
+	_ = filepath.Walk(Pth, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		if !strings.HasSuffix(strings.ToLower(path), ".json") {
+			http.ServeFile(w, r, path)
+		}
+
+		return nil
+	})
+
+
+}
+
 func Search(w http.ResponseWriter, r *http.Request) {
 
 	searchQuery := strings.ToLower(r.URL.Query().Get("sq"))
@@ -161,7 +190,7 @@ func Search(w http.ResponseWriter, r *http.Request) {
 				containsItem := slices.Contains(results, data2)
 				if containsItem == false {
 					path2 := strings.Split(pathList[i], "/")
-					data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2] 
+					data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2]
 					data2.FilePath = ""
 					results = append(results, data2)
 				}
@@ -182,7 +211,7 @@ func Search(w http.ResponseWriter, r *http.Request) {
 						if containsItem == false {
 							data2.FilePath = ""
 							path2 := strings.Split(path1, "/")
-							data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2] 
+							data2.DownloadPath = "http://localhost:8080/download?file=" + path2[len(path2)-2]
 							results = append(results, data2)
 						}
 
@@ -196,6 +225,7 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	// TO-DO - Return array of results back to the requester
 
 	fmt.Printf("results: %+v\n", results)
+	_ = json.NewEncoder(w).Encode(results)
 }
 
 func getDirectoryData(w http.ResponseWriter, r *http.Request) {
