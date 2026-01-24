@@ -12,14 +12,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"gopkg.in/yaml.v3"
 )
 
-const maxUploadSize = 1 * 1024 * 1024 // 1 mb
+var maxUploadSize int
 
 type Desc struct {
 	Description string `json:"description"`
@@ -34,6 +34,13 @@ type Desc2 struct {
 	DownloadPath string
 }
 
+type Config struct {
+	UploadLocation string `yaml:"uploadlocation"`
+	MaxFileSize    int    `yaml:"maxfilesize"`
+}
+
+var config Config
+
 func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/upload", HandleFileUpload).Methods("POST")
@@ -41,7 +48,24 @@ func main() {
 	router.HandleFunc("/search", Search).Methods("GET")
 	router.HandleFunc("/download", DownloadFile).Methods("GET")
 
+	f, err := os.ReadFile("config.yml")
+
+	if err != nil {
+		fmt.Println(err.Error())
+		//log.Fatal(err)
+	}
+
+	if err := yaml.Unmarshal(f, &config); err != nil {
+		fmt.Println(err.Error())
+	}
+
+	if config.MaxFileSize > 0 {
+		maxUploadSize = int(config.MaxFileSize)
+	} else {
+		maxUploadSize = 1 * 1024 * 1024 // 1 mb
+	}
 	log.Fatal(http.ListenAndServe(":8080", router))
+
 }
 
 func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
@@ -49,9 +73,18 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	var data Desc
 
 	wd, _ := os.Getwd()
-	uploadPath := wd + "/uploads/"
 
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+	var uploadPath string
+	if len(config.UploadLocation) > 0 {
+
+		uploadPath = config.UploadLocation
+
+	} else {
+
+		uploadPath = wd + "/uploads/"
+	}
+
+	if err := r.ParseMultipartForm(int64(maxUploadSize)); err != nil {
 		fmt.Printf("Could not parse multipart form: %v\n", err)
 		return
 	}
@@ -68,9 +101,10 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 	defer uploadFile.Close()
 
-	if handler.Size > maxUploadSize {
+	if int(handler.Size) > maxUploadSize {
 		folderSize := fmt.Sprintf("%.2f", float64(handler.Size)/(1024*1024))
-		http.Error(w, "File size of "+folderSize+" MB is bigger than the allowed size of "+strconv.Itoa(maxUploadSize/(1024*1024))+" MB", http.StatusBadRequest)
+		maxUploadSize_text := fmt.Sprintf("%.2f", float64(maxUploadSize)/(1024*1024))
+		http.Error(w, "File size of "+folderSize+" MB is bigger than the allowed size of "+maxUploadSize_text+" MB", http.StatusBadRequest)
 		return
 	}
 
@@ -103,11 +137,18 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 	_, err = os.Stat(finalPath)
 	if os.IsNotExist(err) {
+		os.MkdirAll(filepath.Join(uploadPath, fileName_no_extension), 0700)
+
 	} else {
 		http.Error(w, "Error: file Exists", http.StatusBadRequest)
 		return
 	}
 	newFile, err := os.Create(finalPath)
+
+	if err != nil {
+		http.Error(w, "Error: Unable to create file: "+finalPath+" "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	_, err = newFile.Write(fileBytes)
 
 	if err != nil {
@@ -147,7 +188,6 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-
 }
 
 func Search(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +226,6 @@ func Search(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else {
-
 
 			fileString := strings.ToLower(string(fileBytes))
 			if strings.Contains(fileString, string(searchQuery)) {
