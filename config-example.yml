@@ -4,4 +4,7 @@
 uploadlocation: "/home/johnsmith/Documents/myuploads"
 
 # maxfilesize must be in size of bytes
+
 maxfilesize: 2097152 # 2 MB
+
+port: 9090

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type Desc2 struct {
 type Config struct {
 	UploadLocation string `yaml:"uploadlocation"`
 	MaxFileSize    int    `yaml:"maxfilesize"`
+	Port    int    		   `yaml:"port"`
 }
 
 var config Config
@@ -62,9 +64,18 @@ func main() {
 	if config.MaxFileSize > 0 {
 		maxUploadSize = int(config.MaxFileSize)
 	} else {
-		maxUploadSize = 1 * 1024 * 1024 // 1 mb
+		maxUploadSize = 5 * 1024 * 1024 // 5 mb
 	}
-	log.Fatal(http.ListenAndServe(":8080", router))
+
+	if config.Port > 0 {
+		fmt.Printf("Starting server on port: %d", config.Port) 
+		log.Fatal(http.ListenAndServe(":"+ strconv.Itoa(config.Port), router))
+	} else {
+		fmt.Printf("Starting server on port: 8080")
+		log.Fatal(http.ListenAndServe(":8080", router))
+
+	}
+	
 
 }
 
