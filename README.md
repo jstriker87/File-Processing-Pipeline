@@ -66,3 +66,12 @@ A file processing and storage backend  with metadata, written in Go.
 ## License 
 
 - This program is provided under the GNU General Public License v3.0
+
+
+## Dependencies / Acknowledgements
+
+This project uses [**mux**](https://github.com/gorilla/mux) by [@gorilla](https://github.com/gorilla), A library that implements a request router and dispatcher for matching incoming requests to their respective handler.
+> mux is licensed under the BSD 3-Clause.  
+
+This project uses [**go-yaml**](https://github.com/goccy/go-yaml) from [@goccy](https://github.com/goccy), A library that provides YAML support for the Go language 
+> go-yaml is licensed under the MIT License.
