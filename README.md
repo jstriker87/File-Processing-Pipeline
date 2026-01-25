@@ -40,7 +40,7 @@ A file processing and storage backend  with metadata, written in Go.
         - The search results provided will provide you with a direct link from the /download endpoint to download the files in the search results
 
     - /download - (GET) - Allows users to download a file. The endpoint uses the name of the folder where your file is located
-    - If for example you have a file called accounts-2026.xlsx and your files stored in /home/johnsmith/Documents/files and there you upload a folder created called accounts-2026
+    - If for example you have a file called accounts-2026.xlsx that you wish to download
         - If your server is located on the standard port 8080 then by making a GET request to the endpoint http://localhost:8080/download?file=accounts-2026 you will be returned the file
 
 ## Usage
